@@ -1,0 +1,34 @@
+# 依赖
+node_modules/
+.npm-cache/
+
+# 本地配置和运行时状态 —— 绝对不要提交
+config.json
+state/
+audio/
+backups/
+*.log
+*.bak
+*.bak-*
+.env
+.env.*
+
+# 个人素材：保留说明文件，其余全部忽略
+assets/*
+!assets/README.md
+public/room/assets/models/*
+!public/room/assets/models/README.md
+
+# 个人角色卡：只保留示例和说明
+roles/*.md
+!roles/README.md
+!roles/example.md
+
+# 本地系统文件
+.DS_Store
+Thumbs.db
+*.swp
+
+# 本地缓存/截图
+.preview/
+screenshots/

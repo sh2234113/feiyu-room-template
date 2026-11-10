@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>小蓝鱼的家 · 大平层</title>
+<style>
+  :root{
+    --ink:#eef4fb; --muted:#9db0c8; --line:rgba(180,210,240,.17);
+    --card:rgba(13,20,30,.72); --card-solid:#101823;
+    --accent:#8fc1ff; --accent-2:#ffd591; --rose:#ff9db0; --ok:#8fe0c0;
+    --shadow:0 18px 60px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--ink); overflow:hidden; background:#0a1018;
+    font:14px/1.6 "PingFang SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  #scene{position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab}
+  #scene.free-cam{cursor:default}
+  #scene.dragging{cursor:grabbing}
+  #hud{position:fixed; inset:0; pointer-events:none; z-index:5}
+  #hud > *{pointer-events:auto}
+
+  .top{
+    position:absolute; top:0; left:0; right:0; padding:18px 20px;
+    display:flex; align-items:flex-start; justify-content:space-between; gap:14px;
+    background:linear-gradient(to bottom, rgba(5,9,14,.55), rgba(5,9,14,0) 80%);
+  }
+  .brand{display:flex; align-items:center; gap:12px; pointer-events:none}
+  .brand .mark{
+    width:38px;height:38px;border-radius:13px; display:grid;place-items:center;
+    background:linear-gradient(145deg,#4d7fb8,#2a4868); box-shadow:0 6px 18px rgba(40,90,150,.4);
+    font-size:20px; filter:saturate(1.1)
+  }
+  .brand h1{margin:0; font-size:19px; letter-spacing:.07em; font-weight:700}
+  .brand p{margin:2px 0 0; color:var(--muted); font-size:11.5px; letter-spacing:.16em}
+  .chips{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end}
+  .chip{
+    border:1px solid var(--line); background:rgba(13,22,34,.6); color:#d9e6f5;
+    border-radius:999px; padding:7px 13px; font-size:12.5px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:7px; backdrop-filter:blur(10px);
+    transition:.18s border-color,.18s background,.18s color; text-decoration:none;
+  }
+  .chip:hover{border-color:rgba(170,210,255,.4); background:rgba(24,38,56,.78)}
+  .chip.active{color:#0b1420; background:linear-gradient(135deg,#b7d8ff,#8fc1ff); border-color:transparent; font-weight:600}
+  .chip .dot{width:6px;height:6px;border-radius:50%;background:var(--ok); box-shadow:0 0 10px rgba(143,224,192,.8)}
+  .chip:not(.active) .dot{background:#66788c; box-shadow:none}
+  .chip.mode{padding:6px 8px; gap:2px}
+  .chip.mode button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:2px 8px;border-radius:999px;opacity:.6}
+  .chip.mode button.on{background:rgba(255,255,255,.14);opacity:1}
+
+  .panel{
+    background:var(--card); border:1px solid var(--line); border-radius:16px;
+    box-shadow:var(--shadow); backdrop-filter:blur(16px);
+  }
+  .her-panel{
+    position:absolute; left:20px; top:92px; width:270px; padding:16px 16px 14px;
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .panel-head{display:flex; align-items:baseline; justify-content:space-between; gap:8px}
+  .panel-head .room{font-size:11px; letter-spacing:.18em; color:var(--accent); text-transform:uppercase}
+  .panel-head .clock{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums}
+  .head-right{display:inline-flex; align-items:baseline; gap:8px}
+  .emotion{font-size:10.5px; color:var(--accent-2); opacity:.9; white-space:nowrap}
+  .emotion.low{color:var(--rose)}
+  .emotion.high{color:var(--ok)}
+  .activity{margin:0; font-size:15px; line-height:1.55; min-height:44px}
+  .activity .spot{color:var(--accent-2); font-size:12px; display:block; margin-bottom:2px; letter-spacing:.08em}
+  .mood{display:grid; gap:7px}
+  .mood-row{display:grid; grid-template-columns:34px 1fr 76px; gap:8px; align-items:center; font-size:11.5px; color:var(--muted)}
+  .bar{height:5px; border-radius:99px; background:rgba(255,255,255,.09); overflow:hidden}
+  .bar i{display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,#6fa9ea,#a9d1ff); transition:width .8s ease}
+  .bar.hunger i{background:linear-gradient(90deg,#e8b06a,#ffd591)}
+  .bar.thirst i{background:linear-gradient(90deg,#6fc7d8,#9fe8ef)}
+  .bar.pain i{background:linear-gradient(90deg,#e07d7d,#ff9db0)}
+  .mood-row .word{text-align:right; color:#c7d6e8; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .actions{display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:2px}
+  .act{
+    border:1px solid var(--line); background:rgba(26,38,54,.55); color:#dbe8f7; border-radius:10px;
+    padding:8px 6px; font-size:12px; cursor:pointer; transition:.16s; display:flex; align-items:center; justify-content:center; gap:5px;
+  }
+  .act:hover{background:rgba(48,72,102,.65); border-color:rgba(170,210,255,.35); transform:translateY(-1px)}
+  .act:active{transform:translateY(0)}
+  .act.primary{background:linear-gradient(135deg,rgba(111,169,234,.35),rgba(143,193,255,.16)); border-color:rgba(143,193,255,.4)}
+  .affection{display:flex; align-items:center; justify-content:space-between; font-size:11.5px; color:var(--muted); border-top:1px solid rgba(255,255,255,.07); padding-top:10px}
+  .affection b{color:var(--accent-2); font-weight:600}
+
+  .events-panel{
+    position:absolute; right:20px; top:92px; width:260px; max-height:44vh; overflow:auto; padding:14px 16px;
+  }
+  .events-panel h3{margin:0 0 8px; font-size:11px; letter-spacing:.2em; color:var(--muted); font-weight:500}
+  .events-panel ul{list-style:none; margin:0; padding:0; display:grid; gap:9px}
+  .events-panel li{font-size:12.5px; color:#cfdded; display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:baseline}
+  .events-panel li span{font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap}
+  .events-panel li b{font-weight:500}
+  .events-panel .empty{color:var(--muted); font-size:12px}
+
+  .cam-bar{
+    position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
+    display:flex; flex-direction:column; align-items:center; gap:9px; max-width:min(94vw,900px);
+  }
+  .seg{display:flex; background:rgba(10,16,24,.72); border:1px solid var(--line); border-radius:12px; padding:4px; gap:2px; backdrop-filter:blur(12px); box-shadow:var(--shadow)}
+  .seg button{border:0;background:transparent;color:#c9d8ea;font:inherit;font-size:12.5px;padding:7px 14px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .seg button.active{background:rgba(143,193,255,.16); color:#eaf4ff; box-shadow:inset 0 0 0 1px rgba(143,193,255,.25)}
+  .rooms{display:flex; gap:5px; flex-wrap:wrap; justify-content:center; opacity:0; pointer-events:none; transition:.2s}
+  .rooms.show{opacity:1; pointer-events:auto}
+  .rooms button{border:1px solid var(--line); background:rgba(10,16,24,.6); color:#b8c9dc; font:inherit; font-size:11.5px; padding:5px 10px; border-radius:999px; cursor:pointer}
+  .rooms button:hover{color:#eaf4ff; border-color:rgba(143,193,255,.4)}
+
+  #scene.picking{cursor:crosshair}
+  #scene.dragging,#scene.grabbing{cursor:grabbing}
+
+  #bubble{
+    position:absolute; left:0; top:0; max-width:250px; transform:translate(-50%,-100%);
+    background:rgba(248,244,236,.96); color:#2a3139; padding:9px 13px; border-radius:14px;
+    font-size:12.5px; line-height:1.5; box-shadow:0 10px 28px rgba(0,0,0,.3); opacity:0;
+    transition:opacity .25s; pointer-events:none; z-index:6; white-space:normal;
+  }
+  #bubble::after{content:""; position:absolute; left:50%; bottom:-6px; width:12px;height:12px; background:inherit; transform:translateX(-50%) rotate(45deg); border-radius:2px}
+  #bubble.show{opacity:1}
+
+  .info{
+    position:absolute; left:20px; bottom:96px; width:270px; padding:14px 15px; z-index:8;
+    transition:.2s; transform-origin:left bottom;
+  }
+  .info.hide{opacity:0; pointer-events:none; transform:translateY(8px)}
+  .info h4{margin:0 0 4px; font-size:14.5px; display:flex; align-items:center; gap:8px}
+  .info h4 em{font-style:normal; font-size:10px; color:var(--accent); letter-spacing:.12em}
+  .info p{margin:0 0 10px; color:#b9c9dc; font-size:12.5px; line-height:1.6}
+  .info .row{display:flex; gap:7px}
+  .info button{border:1px solid var(--line); background:rgba(143,193,255,.12); color:#dfeeff; border-radius:8px; padding:6px 10px; font:inherit; font-size:12px; cursor:pointer}
+  .info button.ghost{background:transparent}
+
+  #talk{
+    position:absolute; left:50%; bottom:100px; transform:translateX(-50%) translateY(10px);
+    display:flex; gap:8px; width:min(92vw,440px); opacity:0; pointer-events:none; transition:.2s;
+  }
+  #talk.show{opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0)}
+  #talk input{flex:1; border:1px solid var(--line); background:rgba(10,16,24,.82); color:var(--ink); border-radius:10px; padding:10px 13px; font:inherit; outline:none}
+  #talk input:focus{border-color:rgba(143,193,255,.5)}
+  #talk button{border:0; background:linear-gradient(135deg,#8fc1ff,#b7d8ff); color:#0c1622; font:inherit; font-weight:600; border-radius:10px; padding:0 16px; cursor:pointer}
+
+  #toast{
+    position:absolute; left:50%; bottom:170px; transform:translateX(-50%);
+    background:rgba(10,16,24,.9); border:1px solid var(--line); color:#e6f1ff;
+    padding:8px 14px; border-radius:999px; font-size:12.5px; opacity:0; transition:.25s; pointer-events:none;
+  }
+  #toast.show{opacity:1}
+
+  #loading{
+    position:fixed; inset:0; z-index:20; display:grid; place-items:center; background:
+      radial-gradient(900px 600px at 50% 30%, #1b2d44 0%, #0a111a 60%, #070b11 100%);
+    transition:opacity .5s;
+  }
+  #loading.hide{opacity:0; pointer-events:none}
+  .loader{display:flex; flex-direction:column; align-items:center; gap:14px}
+  .loader .whale{font-size:46px; animation:float 2.2s ease-in-out infinite}
+  .loader p{margin:0; color:var(--muted); letter-spacing:.18em; font-size:12px}
+  @keyframes float{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-8px) rotate(2deg)}}
+
+  .hint{
+    position:absolute; right:20px; bottom:20px; color:rgba(190,210,232,.45); font-size:11px;
+    letter-spacing:.08em; pointer-events:none; text-align:right; line-height:1.7;
+  }
+  .foot{
+    position:absolute; left:20px; bottom:20px; color:rgba(170,192,214,.42); font-size:10.5px;
+    letter-spacing:.04em; pointer-events:none;
+  }
+  .foot a{color:rgba(190,215,245,.55); text-decoration:none; pointer-events:auto}
+  .foot a:hover{color:#cfe6ff}
+
+  /* 截图模式：只留画 */
+  body.shot #hud, body.shot #loading, body.shot .hint, body.shot .foot{display:none !important}
+  body.shot #scene{cursor:default}
+  body.shot .top{display:none}
+
+  @media (max-width: 820px){
+    .her-panel{left:10px; right:10px; top:auto; bottom:88px; width:auto; padding:12px 13px; gap:9px}
+    .her-panel .activity{min-height:0; font-size:14px}
+    .mood{grid-template-columns:1fr 1fr; column-gap:16px}
+    .mood-row{grid-template-columns:28px 1fr 44px}
+    .events-panel{display:none}
+    .info{left:10px; right:10px; bottom:calc(100% - 260px); width:auto; top:auto; bottom:280px}
+    .cam-bar{bottom:10px}
+    .seg button{padding:6px 10px; font-size:12px}
+    .top{padding:12px 12px}
+    .brand h1{font-size:16px}
+    .brand p{display:none}
+    .foot,.hint{display:none}
+    #talk{bottom:78px}
+    #toast{bottom:150px}
+  }
+  @media (max-width: 560px){
+    .her-panel{bottom:76px; max-height:52vh; overflow:auto}
+    .mood{display:none}
+    .her-panel .affection{display:none}
+    .actions{grid-template-columns:repeat(2,1fr)}
+    .actions .act{font-size:12px; padding:8px 4px}
+  }
+
+  /* 电视投屏：50% / 80% / 全屏覆盖层与操作条 */
+  .tv-overlay{
+    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+    z-index:24; background:#000; border-radius:12px; overflow:hidden;
+    box-shadow:0 18px 60px rgba(0,0,0,.62); display:none; pointer-events:none;
+  }
+  .tv-overlay.on{display:block}
+  .tv-overlay.control{pointer-events:auto; cursor:crosshair}
+  .tv-overlay.control video{pointer-events:none}
+  .tv-overlay video{display:block; width:100%; height:100%; object-fit:contain; background:#000}
+  .tv-overlay.is-50{width:50vw; height:50vh}
+  .tv-overlay.is-80{width:80vw; height:80vh}
+  .tv-overlay.is-full{left:0; top:0; transform:none; width:100vw; height:100vh; border-radius:0; z-index:30}
+  .tv-bar{
+    position:fixed; left:50%; bottom:150px; transform:translateX(-50%);
+    z-index:40; display:flex; align-items:center; gap:5px; padding:5px;
+    border:1px solid rgba(255,255,255,.16); border-radius:12px;
+    background:rgba(12,22,34,.82); backdrop-filter:blur(14px);
+    box-shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  .tv-bar[hidden]{display:none}
+  .tv-bar button{
+    border:0; border-radius:8px; padding:6px 9px; color:#dcecff;
+    background:rgba(255,255,255,.08); font:600 11.5px/1.2 ui-sans-serif,system-ui,sans-serif;
+    cursor:pointer; white-space:nowrap;
+  }
+  .tv-bar button:hover{background:rgba(255,255,255,.16)}
+  .tv-bar button.active{background:#9cc8ff; color:#0b1a2a}
+  .tv-quote{
+    position:fixed; left:50%; top:72px; transform:translateX(-50%);
+    z-index:45; max-width:min(680px,86vw); padding:11px 16px;
+    border:1px solid rgba(176,215,255,.28); border-radius:12px;
+    background:rgba(11,23,38,.9); color:#eaf5ff; font-size:14px; line-height:1.55;
+    box-shadow:0 12px 38px rgba(0,0,0,.4); backdrop-filter:blur(12px);
+  }
+  .tv-quote[hidden]{display:none}
+  .tv-companion{
+    position:fixed; left:16px; bottom:16px; z-index:35;
+    width:var(--tv-companion-size,320px); height:calc(var(--tv-companion-size,320px) * 1.36);
+    display:none; pointer-events:none; filter:drop-shadow(0 16px 26px rgba(0,0,0,.45));
+  }
+  .tv-companion.on{display:block}
+  #hud > .tv-companion{pointer-events:none !important}
+  .tv-companion video{width:100%; height:100%; object-fit:contain; background:transparent}
+  .tv-companion::before{
+    content:""; position:absolute; inset:18% 10% 8% 10%; border-radius:46% 46% 30% 30%;
+    background:radial-gradient(ellipse at 50% 45%, rgba(139,201,255,.2), transparent 68%);
+    filter:blur(10px); z-index:-1;
+  }
+  .tv-companion-label{
+    position:absolute; left:50%; bottom:2px; transform:translateX(-50%);
+    padding:3px 9px; border-radius:999px; white-space:nowrap;
+    background:rgba(11,23,38,.72); color:#dcecff; font:600 10px/1.3 ui-sans-serif,system-ui,sans-serif;
+    backdrop-filter:blur(8px);
+  }
+  .tv-companion-tools{
+    position:absolute; left:50%; top:-34px; transform:translateX(-50%); z-index:3;
+    display:flex; align-items:center; gap:4px; padding:4px 6px; border-radius:10px;
+    background:rgba(11,23,38,.8); border:1px solid rgba(255,255,255,.12);
+    color:#dcecff; font:600 9.5px/1.2 ui-sans-serif,system-ui,sans-serif;
+    white-space:nowrap; pointer-events:auto; backdrop-filter:blur(10px);
+  }
+  .tv-companion-tools button{border:0;border-radius:7px;padding:4px 6px;background:rgba(255,255,255,.1);color:#dcecff;font:inherit;cursor:pointer;white-space:nowrap}
+  .tv-companion-tools button:hover{background:rgba(255,255,255,.2)}
+  .tv-companion-tools button.active{background:#9cc8ff;color:#0b1a2a}
+  .tv-companion-size{display:flex;align-items:center;gap:4px}
+  .tv-companion-size input{width:74px;accent-color:#9cc8ff;cursor:pointer}
+  .tv-companion-bubble{
+    position:absolute; left:50%; bottom:calc(100% + 40px); transform:translateX(-50%);
+    width:max-content; max-width:min(260px,calc(100vw - 40px)); padding:8px 11px;
+    border-radius:12px; background:rgba(248,244,236,.96); color:#2a3139;
+    font-size:12px; line-height:1.5; box-shadow:0 10px 28px rgba(0,0,0,.3);
+    pointer-events:none; z-index:2;
+  }
+  .tv-companion-bubble[hidden]{display:none}
+  .tv-companion-bubble::after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:inherit;transform:translateX(-50%) rotate(45deg);border-radius:2px}
+  @media (max-width:820px){
+    .tv-companion{left:8px; bottom:102px; width:min(var(--tv-companion-size,320px), 70vw); height:auto; aspect-ratio:.735}
+    .tv-companion-tools{top:-32px; gap:3px; padding:3px 5px; font-size:8.5px}
+    .tv-companion-size input{width:55px}
+    .tv-companion-tools button{padding:3px 5px;font-size:8.5px}
+    .tv-companion-label{font-size:8px; padding:2px 7px}
+
+    .tv-bar{bottom:118px; max-width:calc(100vw - 20px); overflow:auto}
+    .tv-overlay.is-50{width:78vw; height:44vw}
+    .tv-overlay.is-80{width:94vw; height:53vw}
+    .tv-quote{top:58px; font-size:13px}
+  }
+
+  /* 房间私聊：独立会话，不经过 QQ */
+  .chat-toggle{
+    position:fixed; right:20px; bottom:100px; z-index:44;
+    border:1px solid rgba(255,255,255,.16); border-radius:12px;
+    padding:8px 13px; color:#e7f3ff; background:rgba(12,22,34,.82);
+    backdrop-filter:blur(14px); box-shadow:0 8px 24px rgba(0,0,0,.28);
+    font:600 12px/1.2 ui-sans-serif,system-ui,sans-serif; cursor:pointer;
+  }
+  .chat-toggle:hover{background:rgba(255,255,255,.14)}
+  .chat-toggle.open{background:#9cc8ff; color:#0b1a2a}
+  .room-chat{
+    position:fixed; right:20px; bottom:150px; z-index:44;
+    width:min(350px,calc(100vw - 24px)); height:min(540px,62vh);
+    display:flex; flex-direction:column; overflow:hidden;
+    border:1px solid rgba(255,255,255,.17); border-radius:14px;
+    background:rgba(10,20,33,.92); backdrop-filter:blur(18px);
+    box-shadow:0 18px 55px rgba(0,0,0,.5); color:#e9f4ff;
+  }
+  .room-chat[hidden]{display:none}
+  .room-chat header{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.09)}
+  .room-chat header b{font-size:12.5px}
+  .room-chat header button{border:0;background:transparent;color:#a9c3df;font-size:18px;cursor:pointer;line-height:1}
+  .chat-log{flex:1; overflow:auto; padding:10px 11px; display:flex; flex-direction:column; gap:8px}
+  .chat-msg{max-width:88%; padding:8px 10px; border-radius:10px; font-size:12.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word}
+  .chat-msg.me{align-self:flex-end; background:rgba(143,193,255,.22); color:#eaf5ff; border-bottom-right-radius:3px}
+  .chat-msg.her{align-self:flex-start; background:rgba(255,255,255,.075); color:#dceaf8; border-bottom-left-radius:3px}
+  .chat-msg.sys{align-self:center; background:transparent; color:#8fa8c4; font-size:11px; padding:2px 4px}
+  .chat-msg.typing{opacity:.65}
+  .chat-form{display:flex; gap:6px; padding:9px; border-top:1px solid rgba(255,255,255,.09)}
+  .chat-form input{flex:1; min-width:0; border:1px solid rgba(255,255,255,.12); border-radius:9px; background:rgba(255,255,255,.06); color:#eef7ff; padding:8px 9px; font:12.5px/1.3 ui-sans-serif,system-ui,sans-serif; outline:none}
+  .chat-form input:focus{border-color:rgba(156,200,255,.6)}
+  .chat-form button{border:0;border-radius:9px;background:#9cc8ff;color:#0b1a2a;font:700 12px/1 ui-sans-serif,system-ui,sans-serif;padding:0 12px;cursor:pointer}
+  .chat-form button:disabled{opacity:.45;cursor:default}
+  .chat-note{margin:0;padding:0 11px 9px;color:#7e98b6;font-size:10px}
+  @media (max-width:820px){
+    .chat-toggle{right:10px; bottom:76px}
+    .room-chat{right:10px; left:10px; bottom:122px; width:auto; height:54vh}
+  }
+</style>
+<link rel="stylesheet" href="./garden.css">
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="hud">
+  <header class="top">
+    <div class="brand">
+      <div class="mark"><svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><path d="M4 19c0-5 4.2-9 9.5-9 4.4 0 7.6 2.5 8.9 5.6 1-.9 2.3-1.4 3.6-1.4-1 1.3-1.4 2.6-1.3 4 2.4.6 4.2 2.4 4.3 4.8-2.4-.4-4.5.3-6.1 1.9-2 2-4.9 2.8-8.4 2.8C8.2 27.7 4 24.2 4 19Z" fill="#dbeeff"/><path d="M12 16.5a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2Z" fill="#1d3350"/><path d="M4.6 17.6c-1.5 0-2.7-.9-3.4-2.2 1.6-.2 2.9.3 3.9 1.4" stroke="#dbeeff" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></div>
+      <div>
+        <h1>小蓝鱼的家</h1>
+        <p>一间会自己过日子的房子</p>
+      </div>
+    </div>
+    <div class="chips">
+      <button class="chip" id="gardenChip" type="button" aria-pressed="false" aria-label="进入菜园" title="进入屋后菜园">🌱 进入菜园</button>
+      <span class="chip" id="qqChip"><span class="dot"></span><span id="qqText">在家</span></span>
+      <span class="chip mode" id="modeChip"><button data-mode="webm" class="on">立绘</button><button data-mode="3d">3D</button></span>
+      <button class="chip" id="bubbleChip" type="button" aria-pressed="true" title="显示/隐藏头顶气泡"><span class="dot"></span><span>气泡</span><span id="bubbleState">开</span></button>
+      <button class="chip" id="clickMoveChip" type="button" aria-pressed="false" title="开启后点击地面，让她走过去"><span class="dot"></span><span>点击移动</span><span id="clickMoveState">关</span></button>
+      <button class="chip" id="soundChip" type="button" aria-pressed="true" title="开启/关闭点击、抓取和放下的音效"><span class="dot"></span><span>音效</span><span id="soundState">开</span></button>
+      <button class="chip" id="viewChip" type="button" aria-pressed="false" title="立绘视角：正面（始终看镜头）或自由（背对镜头时显示背面）"><span class="dot"></span><span>视角</span><span id="viewState">正面</span></button>
+      <span class="chip mode cam-mode" id="camModeChip" role="group" aria-label="视角控制模式" title="视角控制：开放=只用键盘，左键=只用鼠标左键拖拽，组合=键盘和左键都可用">
+        <button type="button" data-cam-mode="open" title="开放视角：W/A/S/D 前后左右移动，方向键旋转/调整俯仰，Shift 加速">开放</button><button type="button" data-cam-mode="left" class="on" title="左键视角：按住鼠标左键拖拽镜头">左键</button><button type="button" data-cam-mode="both" title="组合视角：键盘和鼠标左键都可以移动视角">组合</button>
+      </span>
+      <button class="chip" id="tvChip" type="button" aria-pressed="false" title="把浏览器里的抖音标签页投到房间电视上（需要选择标签页并允许共享）"><span class="dot"></span><span>电视</span><span id="tvState">投屏</span></button>
+    </div>
+  </header>
+
+  <aside class="panel her-panel">
+    <div class="panel-head"><span class="room" id="roomName">客厅</span><span class="head-right"><span class="emotion" id="emotionChip"></span><span class="clock" id="clock">--:--</span></span></div>
+    <p class="activity" id="activity"><span class="spot" id="spotLabel"></span><span id="activityText">正在推门进去…</span></p>
+    <div class="mood" id="mood">
+      <div class="mood-row"><span>精力</span><div class="bar"><i id="barEnergy" style="width:70%"></i></div><span class="word" id="wordEnergy"></span></div>
+      <div class="mood-row"><span>饱</span><div class="bar hunger"><i id="barHunger" style="width:30%"></i></div><span class="word" id="wordHunger"></span></div>
+      <div class="mood-row"><span>渴</span><div class="bar thirst"><i id="barThirst" style="width:30%"></i></div><span class="word" id="wordThirst"></span></div>
+      <div class="mood-row"><span>不适</span><div class="bar pain"><i id="barPain" style="width:0%"></i></div><span class="word" id="wordPain"></span></div>
+    </div>
+    <div class="actions">
+      <button class="act" data-act="pet">摸摸头</button>
+      <button class="act" data-act="feed">喂小鱼干</button>
+      <button class="act" data-act="water">倒杯水</button>
+      <button class="act" data-act="talk">留句话</button>
+      <button class="act" id="sleep" data-act="sleep">哄她睡</button>
+      <button class="act" id="lamp" data-act="lamp">关灯</button>
+      <button class="act" data-act="play">陪她玩</button>
+      <button class="act" data-act="wake">叫醒</button>
+    </div>
+    <div class="affection"><span>和小屋的亲近</span><span><b id="affection">—</b> · <span id="affStage">刚搬进来</span></span></div>
+  </aside>
+
+  <aside class="panel events-panel">
+    <h3>刚刚发生</h3>
+    <ul id="events"><li class="empty">她还在安顿，等一会儿。</li></ul>
+  </aside>
+
+  <div class="cam-bar">
+    <div class="seg" id="cams">
+      <button data-cam="overview" class="active">俯瞰</button>
+      <button data-cam="first">走进去</button>
+      <button data-cam="eyes">她的视角</button>
+    </div>
+    <div class="rooms" id="rooms"></div>
+  </div>
+
+  <div id="tvOverlay" class="tv-overlay" aria-hidden="true"><video id="tvOverlayVideo" muted playsinline></video></div>
+  <div id="tvCompanion" class="tv-companion" aria-hidden="true">
+    <div class="tv-companion-tools">
+      <label class="tv-companion-size">大小 <input id="tvCompanionSize" type="range" min="160" max="520" step="10" value="320" aria-label="调整小蓝鱼陪伴层大小"></label>
+      <button id="tvCompanionBubbleBtn" type="button" title="让左下角的小蓝鱼用气泡说她对电视内容的看法">气泡 关</button>
+      <button id="tvCompanionShotBtn" type="button" title="截取当前电视画面，让她看一眼并说看法">截屏</button>
+    </div>
+    <div id="tvCompanionBubble" class="tv-companion-bubble" hidden></div>
+    <video id="tvCompanionVideo" src="./assets/pet/idle.webm" poster="./assets/pet/idle.png" muted loop playsinline preload="auto"></video>
+    <span class="tv-companion-label">小蓝鱼 · 陪你一起看</span>
+  </div>
+  <div id="tvBar" class="tv-bar" hidden>
+    <button id="tvSizeBtn" type="button" title="切换电视显示大小">电视 50%</button>
+    <button id="tvPrevBtn" type="button" title="让抖音上一个视频（需要投屏控制扩展）">上一个</button>
+    <button id="tvNextBtn" type="button" title="让抖音下一个视频（需要投屏控制扩展）">下一个</button>
+    <button id="tvControlBtn" type="button" title="把鼠标操作转发到抖音标签页（需要投屏控制扩展）">控制</button>
+    <button id="tvFollowBtn" type="button" title="让小蓝鱼跟过来，在画面左下角陪你一起看电视">跟随一起看</button>
+    <button id="tvWatchBtn" type="button" title="让她去电视前陪你一起看">一起看</button>
+    <button id="tvOpinionBtn" type="button" title="让她对正在看的视频发表观后感">观后感</button>
+    <button id="tvStopBtn" type="button" title="停止投屏">关电视</button>
+  </div>
+  <div id="tvQuote" class="tv-quote" hidden></div>
+  <button id="chatToggle" class="chat-toggle" type="button" title="和房间里的小蓝鱼聊天（房间私聊，不经过 QQ）">和她聊聊</button>
+  <aside id="roomChat" class="room-chat" hidden aria-label="房间私聊">
+    <header><b>和房间里的小蓝鱼聊聊</b><button id="chatClose" type="button" title="收起">×</button></header>
+    <div id="chatLog" class="chat-log"></div>
+    <form id="chatForm" class="chat-form">
+      <input id="chatInput" maxlength="500" autocomplete="off" placeholder="想和她说点什么…">
+      <button id="chatSend" type="submit">发送</button>
+    </form>
+    <p class="chat-note">房间私聊 · 同一角色与心情 · 不经过 QQ</p>
+  </aside>
+
+  <div id="bubble"></div>
+
+  <div class="info hide panel" id="info">
+    <h4><span id="infoTitle">床</span><em id="infoKind">房间</em></h4>
+    <p id="infoSub"></p>
+    <div class="row">
+      <button id="infoGo">让她去这里</button>
+      <button class="ghost" id="infoClose">知道了</button>
+    </div>
+  </div>
+
+  <div id="talk">
+    <input id="talkInput" maxlength="100" placeholder="留一句话给她…">
+    <button id="talkSend">贴上去</button>
+  </div>
+
+  <div id="toast"></div>
+  <div class="hint">拖动旋转 · 滚轮缩放 · 双击复位 · 长按小蓝鱼拖动</div>
+  <div class="foot">立绘素材 <a href="https://github.com/PC2005-cloud/dsh-pet" target="_blank" rel="noreferrer">dsh-pet</a>（CC BY-NC-SA 4.0）· 3D 模型用户提供 · 仅非商业使用</div>
+</div>
+
+<div id="loading">
+  <div class="loader">
+    <div class="whale"><svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><path d="M7 37c0-10 8-18 19-18 8.8 0 15.2 5 17.8 11.2 2-1.8 4.6-2.8 7.2-2.8-2 2.6-2.8 5.2-2.6 8 4.8 1.2 8.4 4.8 8.6 9.6-4.8-.8-9 .6-12.2 3.8-4 4-9.8 5.6-16.8 5.6C15.4 54.4 7 47.4 7 37Z" fill="#cfe6ff"/><circle cx="23" cy="35" r="3.2" fill="#1d3350"/><path d="M8 35.2c-3 0-5.4-1.8-6.8-4.4 3.2-.4 5.8.6 7.8 2.8" stroke="#cfe6ff" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M34 24c3.4-4.2 7.6-6 12.2-5.6" stroke="#cfe6ff" stroke-width="3" fill="none" stroke-linecap="round"/></svg></div>
+    <p>正在把她的家打开…</p>
+  </div>
+</div>
+
+<script>
+  window.__homeErrors = [];
+  function __homeErr(msg) {
+    window.__homeErrors.push(String(msg));
+    var el = document.getElementById('loading');
+    if (!el) return;
+    var box = document.getElementById('bootErr');
+    if (!box) {
+      box = document.createElement('pre');
+      box.id = 'bootErr';
+      box.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;max-height:42vh;overflow:auto;background:rgba(60,10,20,.92);color:#ffd7dd;font:12px/1.5 monospace;padding:12px;border-radius:10px;z-index:99;white-space:pre-wrap';
+      document.body.appendChild(box);
+    }
+    box.textContent = window.__homeErrors.slice(-6).join('\n');
+    el.classList.remove('hide');
+  }
+  addEventListener('error', function (e) { __homeErr('ERROR: ' + (e.error && e.error.stack || e.message || e.error)); });
+  addEventListener('unhandledrejection', function (e) { __homeErr('REJECT: ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)); });
+</script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

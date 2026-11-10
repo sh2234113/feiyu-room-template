@@ -1,0 +1,10 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>菜园建模预览</title><style>body{margin:0}canvas{display:block}aside{position:absolute;left:32px;top:28px;background:#fffcf1e8;color:#304638;border-radius:16px;padding:18px 24px;font:14px/1.7 system-ui}h1{font-size:22px;margin:0}p{margin:3px 0 0}</style><canvas></canvas><aside><h1>小蓝鱼的菜园</h1><p>成熟阶段建模预览 · 8 畦菜地 / 12 种作物</p></aside><script type="module">
+import * as THREE from './vendor/three.module.js';import {createWorld} from './world.js';import {createGardenWorld} from './garden-world.js';import {getGardenFraming} from './garden-camera.js';
+const r=new THREE.WebGLRenderer({canvas:document.querySelector('canvas'),antialias:true});r.setSize(innerWidth,innerHeight);r.setPixelRatio(1);r.shadowMap.enabled=true;r.shadowMap.type=THREE.PCFSoftShadowMap;r.toneMapping=THREE.ACESFilmicToneMapping;r.toneMappingExposure=1.04;
+const w=createWorld(r,{quality:'balanced'});w.setCeilingVisible(false);w.setLabelsVisible(false);w.updateEnvironment({hour:14,lamp:false});
+const g=createGardenWorld(w,r,{quality:'balanced'});const ids=['tomato','carrot','eggplant','corn','cucumber','lettuce','strawberry','pumpkin'];
+g.update({plots:ids.map((cropId,id)=>({id,tilled:true,cropId,stage:3,mature:true,moisture:.6,fertilized:true}))});
+const c=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,.08,150);
+function draw(){r.setSize(innerWidth,innerHeight);c.aspect=innerWidth/innerHeight;const f=getGardenFraming(innerWidth,innerHeight,innerWidth);c.fov=f.fov;c.setViewOffset(innerWidth,innerHeight,f.offsetX,f.offsetY,innerWidth,innerHeight);c.position.set(f.target[0]+Math.sin(f.az)*Math.cos(f.elev)*f.radius,f.target[1]+Math.sin(f.elev)*f.radius,f.target[2]+Math.cos(f.az)*Math.cos(f.elev)*f.radius);c.lookAt(...f.target);w.updateCutaway(c.position,new THREE.Vector3(...f.target),true);r.render(w.scene,c);window.showcaseReady=true;window.showcaseStats={...r.info.render};}
+addEventListener('resize',draw);draw();
+</script></html>
