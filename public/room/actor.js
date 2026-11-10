@@ -1,7 +1,11 @@
-// 小蓝鱼的立绘播放器 —— dsh-pet 的透明 webm 动画贴在 3D 画面上。
+// 大肥鱼的立绘播放器 —— dsh-pet 的透明 webm 动画贴在 3D 画面上。
 //
 // 只做表现：切片段、交叉淡入、脚下阴影、朝向相机。行为由 home-state.js 决定。
 import * as THREE from './vendor/three.module.js';
+
+// 有些原始走路片段开头是站立/起步前摇。循环时从 trim 点开始，
+// 避免角色已经在移动、画面却还站着滑一段。
+const LOOP_TRIM = Object.freeze({ run_happy: 0.90 });
 
 export const CLIPS = Object.freeze({
   idle: 'assets/pet/idle.webm',
@@ -11,9 +15,8 @@ export const CLIPS = Object.freeze({
   walk_fast: 'assets/pet/walk_fast.webm',
   run_happy: 'assets/pet/run_happy.webm',
   run_hurry: 'assets/pet/run_hurry.webm',
-  // 公开模板不包含用户私有的背面帧；背面使用正面待机/跑姿兜底。
+  // 公开模板不含用户私有的背面帧；保留 key，用正面待机兜底。
   back_idle: 'assets/pet/idle.webm',
-  back_run: 'assets/pet/run_happy.webm',
   sleep_in: 'assets/pet/sleep_in.webm',
   sleep_loop: 'assets/pet/sleep_loop.webm',
   sleep_out: 'assets/pet/sleep_out.webm',
@@ -222,10 +225,26 @@ export class SpriteActor {
     const next = this.layers[nextIndex];
     const prev = this.layers[this.active];
     next.mesh.visible = true;
+    // 清掉这个图层上一轮留下的“跳过前摇后手动循环”监听，避免叠监听。
+    if (next.video._trimEnded) {
+      next.video.removeEventListener('ended', next.video._trimEnded);
+      next.video._trimEnded = null;
+    }
     // 不在这里 await 视频：轮询/连续 setClip 时，等待会让 current 一直停在 idle。
     // 先把逻辑片段切过去，视频 ready 后再淡入；加载失败也不会卡住移动。
     const loaded = next.load(CLIPS[name]);
-    next.video.loop = !once;
+    const trimStart = once ? 0 : (LOOP_TRIM[name] || 0);
+    next.video.loop = !once && !trimStart;
+    if (trimStart) {
+      // 不用 loop 属性：loop 会从 0 重播，前摇每次循环都会出现。
+      const onTrimEnded = () => {
+        if (this.current !== name) return;
+        try { next.video.currentTime = trimStart; } catch { /* 还没元数据 */ }
+        next.video.play().catch(() => {});
+      };
+      next.video.addEventListener('ended', onTrimEnded);
+      next.video._trimEnded = onTrimEnded;
+    }
     next.mesh.visible = true;
     next.fade = 0;
     next.material.opacity = 0;
@@ -244,7 +263,7 @@ export class SpriteActor {
     this._lastSwap = performance.now();
     loaded.then(() => {
       if (this.current !== name) return;
-      try { next.video.currentTime = 0; } catch { /* 还没元数据 */ }
+      try { next.video.currentTime = trimStart; } catch { /* 还没元数据 */ }
       next.play();
       next.setTarget(1);
       if (fade) {

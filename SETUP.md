@@ -22,7 +22,7 @@
 - 只玩房间：需要 Node + 本项目 + DSH；SnowLuma 可以先不接；
 - 接 QQ：额外需要 SnowLuma、QQ 账号、OneBot v11 配置；
 - 房间私聊/电视观后感：需要 DSH 模型可调用；
-- 3D 模型、语音库、贴纸：默认不带，自己按授权补。
+- 3D 模型：模板附带作者授权的优化版 GLB；语音库/贴纸默认不带。
 
 ---
 
@@ -287,14 +287,17 @@ cp roles/example.md roles/我的角色.md
 
 ### 12.1 3D 模型
 
-默认 2D 立绘。要启用 3D：
+模板已经附带作者授权的优化版模型和原始工程备份：
 
 ```text
-public/room/assets/models/da-feiyu.opt.glb
+public/room/assets/models/da-feiyu.opt.glb   6.7 MB，页面加载
+public/room/assets/models/da-feiyu.glb       58.9 MB，原始备份，页面不加载
 ```
 
-要求：Y 轴向上、脚底 y=0、正面朝 +Z。  
-**必须是你有权分发的模型**；不要把作者私人模型传到公开仓库。
+页面默认仍使用 2D 立绘；切到 3D 时加载 6.7 MB 优化版。
+3D 模式下点右上「画质」可切换到 58.9 MB 原始工程模型；首次加载较慢，切回标准会释放源模型显存。  
+模型版权归作者，仅随模板用于个人非商业展示；不要单独转售、商用或批量再分发。  
+要换模型：保持 Y 轴向上、脚底 y=0、正面朝 +Z，并修改 `public/room/model-actor.js` 的 `MODEL_URL`。
 
 ### 12.2 语音
 
@@ -369,7 +372,7 @@ curl -I http://127.0.0.1:3080
 
 - 用 Chrome/Edge，不要用不支持 WebGL 的内置浏览器；
 - 更新显卡驱动；
-- 先不要点 3D（模板没有附带 3D 模型）。
+- 先不要点 3D，确认 `public/room/assets/models/da-feiyu.opt.glb` 已下载（约 6.7 MB；旁边 58.9 MB 的 `da-feiyu.glb` 只是原始备份，不需要加载）。
 
 ### 电视观后感失败
 

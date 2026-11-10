@@ -12,6 +12,14 @@
 - 约束：署名、非商业、相同方式共享
 - 详细署名：`public/room/assets/pet/CREDITS.md`
 
+## 作者提供的 3D 模型
+
+- 文件：`public/room/assets/models/da-feiyu.opt.glb`
+- 来源：项目作者提供（Tripo 生成后减面/优化）
+- 授权：版权归作者；随本模板用于个人、非商业展示
+- 限制：不可单独提取、转售、商用或批量再分发；商用/二次创作需作者书面许可
+- 文件：`public/room/assets/models/da-feiyu.glb`（58.9 MB，原始工程）和 `da-feiyu.opt.glb`（6.7 MB，运行时）
+
 ## Three.js
 
 - `public/room/vendor/three.module.js`
@@ -39,6 +47,5 @@ SnowLuma 是独立软件，**不在本仓库内，也不随本仓库分发**。
 
 ## 未包含
 
-- 用户/作者私人 3D 模型；
 - 作者角色卡、语音、照片、聊天记录；
 - 任何 API Key、Cookie、token。

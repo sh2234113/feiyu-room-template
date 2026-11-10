@@ -18,6 +18,8 @@ assets/*
 !assets/README.md
 public/room/assets/models/*
 !public/room/assets/models/README.md
+!public/room/assets/models/da-feiyu.opt.glb
+!public/room/assets/models/da-feiyu.glb
 
 # 个人角色卡：只保留示例和说明
 roles/*.md

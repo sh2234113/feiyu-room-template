@@ -1,4 +1,4 @@
-// 小蓝鱼的家 —— 页面表现层。
+// 大肥鱼的家 —— 页面表现层。
 // 事实/行为在 src/home-state.js；这里只读快照、画房间、处理相机与交互。
 import * as THREE from './vendor/three.module.js';
 import { createWorld } from './world.js';
@@ -453,23 +453,35 @@ let chibiLoading = null;
 let model3d = null;
 let modelReady = false;
 let modelLoading = null;
+let modelQuality = 'optimized';
+let modelSwitching = null;
+const MODEL_URLS = Object.freeze({
+  optimized: './assets/models/da-feiyu.opt.glb',
+  source: './assets/models/da-feiyu.glb'
+});
 let charMode = localStorage.getItem('home-char-mode') === '3d' ? '3d' : 'webm';
 if (params.get('char') === '3d') charMode = '3d';
 const HIDE_HUD = params.get('hud') === '0';
 
-// 成品模型优先；加载失败才退回程序化占位。默认（立绘）不加载 18MB 模型。
-function ensureModel3d() {
+// 成品模型优先；加载失败才退回程序化占位。默认（立绘）不加载 3D 模型。
+// 两个画质档共用同一套 ModelActor，只换 GLB URL。
+function ensureModel3d(quality = modelQuality) {
+  if (modelReady && model3d && modelQuality === quality) return Promise.resolve(true);
   if (modelLoading) return modelLoading;
   modelLoading = import('./model-actor.js').then(async (mod) => {
     if (!mod?.ModelActor) return false;
-    const m = new mod.ModelActor(scene);
+    const url = MODEL_URLS[quality] || MODEL_URLS.optimized;
+    const m = new mod.ModelActor(scene, { url, quality });
     charWrap.add(m.group);
     const ok = await m.load();
     if (!ok) { try { m.dispose(); } catch { /* 忽略 */ } return false; }
+    const old = model3d;
     model3d = m;
     modelReady = true;
+    modelQuality = quality;
+    if (old) { try { old.dispose(); } catch { /* 忽略 */ } }
     return true;
-  }).catch(() => false);
+  }).catch(() => false).finally(() => { modelLoading = null; });
   return modelLoading;
 }
 function ensureChibi() {
@@ -483,10 +495,63 @@ function ensureChibi() {
   }).catch(() => false);
   return chibiLoading;
 }
-async function ensure3d() {
-  if (await ensureModel3d()) return true;
+async function ensure3d(quality = modelQuality) {
+  if (await ensureModel3d(quality)) return true;
   return ensureChibi();
 }
+function updateModelQualityChip(loading = false) {
+  const button = $('modelQualityChip');
+  const stateEl = $('modelQualityState');
+  if (!button) return;
+  const high = modelQuality === 'source';
+  button.classList.toggle('active', high);
+  button.setAttribute('aria-pressed', String(high));
+  button.disabled = loading;
+  button.title = high
+    ? '当前：高画质 58.9 MB 原始模型；点击切回 6.7 MB 标准模型'
+    : '当前：标准 6.7 MB；点击加载 58.9 MB 原始模型（首次较慢）';
+  if (stateEl) stateEl.textContent = loading ? '加载中…' : high ? '高画质' : '标准';
+}
+
+async function switchModelQuality() {
+  if (modelSwitching || modelLoading) return;
+  const next = modelQuality === 'source' ? 'optimized' : 'source';
+  const previousMode = charMode;
+  const previousQuality = modelQuality;
+  modelSwitching = next;
+  updateModelQualityChip(true);
+  toast(next === 'source'
+    ? '正在加载 58.9 MB 原始模型，首次会比较久…'
+    : '正在切回 6.7 MB 标准模型…');
+  try {
+    // 如果当前还在加载标准模型，等它结束后再加载目标档；不能误报成功。
+    let ok = await ensureModel3d(next);
+    if (ok && modelQuality !== next) ok = await ensureModel3d(next);
+    if (!ok) {
+      toast(next === 'source' ? '原始模型加载失败，继续用标准模型' : '模型切换失败');
+      if (!modelReady && previousQuality === 'optimized') await ensureModel3d('optimized').catch(() => false);
+      if (!modelReady) {
+        charMode = previousMode;
+        document.querySelectorAll('#modeChip button').forEach((x) => x.classList.toggle('on', x.dataset.mode === charMode));
+      }
+    } else {
+      charMode = '3d';
+      document.querySelectorAll('#modeChip button').forEach((x) => x.classList.toggle('on', x.dataset.mode === charMode));
+      applySpriteViewPref();
+      applyCharVisibility();
+      syncCharacter();
+      focusCharacter();
+      toast(next === 'source' ? '已切换高画质：原始模型 58.9 MB' : '已切回标准画质：6.7 MB');
+    }
+  } catch (error) {
+    toast(`模型切换失败：${error?.message || error}`);
+  } finally {
+    modelSwitching = null;
+    updateModelQualityChip(false);
+    applyCharVisibility();
+  }
+}
+
 function use3dActive() { return charMode === '3d' && (modelReady || chibiReady); }
 function applyCharVisibility() {
   const eyes = VIEW.mode === 'eyes';
@@ -725,9 +790,13 @@ function legalDragPoint(p) {
     const [x0, z0, x1, z1] = room.bounds;
     if (p[0] >= x0 && p[0] <= x1 && p[1] >= z0 && p[1] <= z1) {
       if (room.id === 'garden' || room.id === 'yard') {
-        const spots = Object.values(state?.layout?.spots?.[room.id] || {});
-        const safe = spots.reduce((best, spot) => !best || Math.hypot(p[0] - spot.pos[0], p[1] - spot.pos[1]) < Math.hypot(p[0] - best.pos[0], p[1] - best.pos[1]) ? spot : best, null);
-        return safe?.pos?.slice() || (lastDisplayPos || state.her.pos).slice();
+        // 和房间一样连续跟随鼠标；不要每一步都吸附到最近的菜畦/门口，
+        // 否则拖拽会一跳一跳。服务端 place 会保留这个自由落点。
+        const pad = 0.18;
+        return [
+          Math.min(x1 - pad, Math.max(x0 + pad, p[0])),
+          Math.min(z1 - pad, Math.max(z0 + pad, p[1]))
+        ];
       }
       return [p[0], p[1]];
     }
@@ -784,7 +853,7 @@ function finishCharDrag(e) {
   showClickMarker(p);
   playDrop();
   bounceCharacter();
-  act('place', { pos: p });
+  act('place', { pos: p, free: true });
 }
 
 function cancelCharDrag() {
@@ -917,6 +986,7 @@ function onClick(e) {
 // ── 数据 / 表现 ───────────────────────────────────────────────────────────
 let state = null;
 let roomView = null;
+let petActionOverride = null;
 let requestInFlight = false;
 let lastActivity = '';
 let bubbleUntil = 0;
@@ -951,6 +1021,7 @@ let spriteView = localStorage.getItem('home-sprite-view') === 'free' ? 'free' : 
 if (params.get('view') === 'free') spriteView = 'free';
 if (params.get('view') === 'front') spriteView = 'front';
 let lastBackView = null;
+let lastViewZone = null;
 let audioCtx = null;
 const clickSfx = new Audio('assets/sound/click-duck.wav');
 clickSfx.preload = 'auto';
@@ -1219,24 +1290,42 @@ function updateRoomsUI() {
   el.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.room === VIEW.fpRoom && VIEW.mode === 'first'));
 }
 
-function isBackView() {
-  if (charMode !== 'webm' || spriteView !== 'free' || !state?.her) return false;
-  const p = lastDisplayPos || state.her.pos;
+function viewDiff(her = state?.her) {
+  if (!her) return 0;
+  const p = lastDisplayPos || her.pos;
   const toCam = Math.atan2(camera.position.x - p[0], -(camera.position.z - p[1])) * 180 / Math.PI;
-  const facing = Number(state.her.facing) || 0;
-  const diff = Math.abs(((facing - toCam + 540) % 360) - 180);
+  const facing = Number(her.facing) || 0;
+  return Math.abs(((facing - toCam + 540) % 360) - 180);
+}
+function isBackView() {
+  if (charMode !== 'webm' || !state?.her) return false;
+  // 「正面」只是待机偏好：站着时看镜头；一旦走路，必须按真实移动方向选背面/侧面，
+  // 否则朝远处走时还播正面帧，看起来就是倒着走。
+  if (spriteView !== 'free' && !state.her.walking) return false;
   // 进入用 108°，退出用 95°，避免镜头在边界附近抖动时来回切正/背面。
-  return diff > (lastBackView ? 95 : 108);
+  return viewDiff() > (lastBackView ? 95 : 108);
+}
+/** 侧身跑只用在“镜头看到侧面”的区间；正面/背面不再套用左侧跑。 */
+function isSideRun(her = state?.her) {
+  if (!her?.walking || charMode !== 'webm') return false;
+  if (VIEW.mode === 'first' || VIEW.mode === 'eyes') return false;
+  // 背面奔跑已删除：镜头在背后时用侧跑帧，不再切 back_run。
+  return viewDiff(her) >= 48;
 }
 
 function clipFor(her) {
   if (!her) return 'idle';
+  if (petActionOverride && !her.asleep && Date.now() < petActionOverride.until) return petActionOverride.clip;
   if (her.asleep) {
     // 兜底：旧状态/异常状态下如果还没到床，绝不播睡眠动画。
-    if (her.spot !== 'bed') return her.walking ? (her.runStyle === 'happy' ? 'run_happy' : 'run_hurry') : 'walk';
+    if (her.spot !== 'bed') return her.walking ? 'run_happy' : 'idle';
     return sleepPhase === 'loop' || sleepPhase === 'none' ? 'sleep_loop' : 'sleep_in';
   }
-  if (her.walking) return isBackView() ? 'back_run' : (her.runStyle === 'happy' ? 'run_happy' : 'run_hurry'); // 两种跑姿，按心情/紧急度选
+  if (her.walking) {
+    // 背面跑 / 侧面跑 / 正面跑分开选，避免拿左侧跑帧去跑右侧方向。
+    if (isSideRun(her)) return 'run_hurry';
+    return 'run_happy'; // 正面只有 run_happy 是正面帧；walk_fast 是侧跑，不能当前面用
+  }
   if (Date.now() < opinionUntil && opinionClip) return opinionClip;
 
   const k = her.kind || 'idle';
@@ -1285,12 +1374,13 @@ const ONCE = new Set(['react_happy', 'react_shy', 'react_scare', 'stretch', 'cur
 function syncCharacter() {
   const her = state?.her;
   if (!her) return;
+  if (her.asleep || her.room === 'garden') petActionOverride = null;
   const wasAsleep = lastSleep;
   lastSleep = her.asleep;
 
   if (her.asleep && her.spot !== 'bed') {
     // 还没进被窝：按移动/站立处理，不进入 sleep_in/sleep_loop。
-    const name = her.walking ? (her.runStyle === 'happy' ? 'run_happy' : 'run_hurry') : 'walk';
+    const name = her.walking ? 'run_happy' : 'idle';
     if (actor.current !== name) actor.setClip(name);
     return;
   }
@@ -1329,6 +1419,40 @@ function syncCharacter() {
   };
   model3d?.setPose(pose);
   if (chibi) chibi.setPose(pose);
+}
+
+// ── 动作栏 ────────────────────────────────────────────────────────────────
+const PET_ACTION_DURATION = Object.freeze({
+  dance: 6200, stretch: 4200, curtsy: 3800, game: 5200, fan: 5200,
+  mooncake: 5200, eat_snack: 4800, yawn: 4200, nap: 7000,
+  idle_look: 4200, brush: 4600, idle_hum: 4600
+});
+function playPetAction(clip, label) {
+  if (!state?.her) { toast('她还没出来'); return; }
+  if (charMode !== 'webm') { toast('动作栏目前只在立绘模式播放；先切到「立绘」'); return; }
+  if (state.her.asleep) { toast('她睡着了，先叫醒再让她跳舞'); return; }
+  // 走路中也可以跳：先把“当前看到的脚下位置”提交为落点，停住路线再播。
+  // 不等待网络返回，动作立即可见；place 返回后会把她的服务端位置对齐。
+  if (state.her.walking || (state.her.route?.length > 0)) {
+    const stopPos = Array.isArray(lastDisplayPos) ? lastDisplayPos.slice() : state.her.pos.slice();
+    void act('place', { pos: stopPos });
+  }
+  const duration = PET_ACTION_DURATION[clip] || 4800;
+  const token = `${clip}:${Date.now()}`;
+  petActionOverride = { clip, label, until: Date.now() + duration, token };
+  try {
+    actor.setClip(clip, {
+      once: true,
+      onEnded: () => {
+        if (petActionOverride?.token === token) { petActionOverride = null; syncCharacter(); }
+      }
+    });
+  } catch { petActionOverride = null; toast('这个动作没加载出来'); return; }
+  setBubble(label, Math.min(duration, 6000));
+  toast(`大肥鱼：${label}`);
+  setTimeout(() => {
+    if (petActionOverride?.token === token) { petActionOverride = null; syncCharacter(); }
+  }, duration + 120);
 }
 
 // ── 动作 ──────────────────────────────────────────────────────────────────
@@ -1414,6 +1538,9 @@ document.querySelectorAll('[data-act]').forEach((btn) => {
     act(a);
   });
 });
+document.querySelectorAll('[data-pet-clip]').forEach((button) => {
+  button.addEventListener('click', () => playPetAction(button.dataset.petClip, button.dataset.petLabel || '动一下'));
+});
 $('talkSend').addEventListener('click', sendTalk);
 $('talkInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendTalk(); });
 
@@ -1436,8 +1563,9 @@ $('viewChip')?.addEventListener('click', () => {
   localStorage.setItem('home-sprite-view', spriteView);
   applySpriteViewPref();
   lastBackView = null;
+  lastViewZone = null;
   syncCharacter();
-  toast(spriteView === 'free' ? '自由朝向：她可以背对镜头了' : '正面朝向：她会一直看着你');
+  toast(spriteView === 'free' ? '自由朝向：待机也会随镜头转身' : '正面待机：站着看镜头，走路仍按方向');
 });
 
 document.querySelectorAll('#camModeChip button[data-cam-mode]').forEach((button) => {
@@ -1522,7 +1650,7 @@ function showVideoOpinion() {
   lastOnceAt = 0;
   syncCharacter();
   setBubble(line, 7000);
-  showTvQuote(`小蓝鱼：${line}`, 7000);
+  showTvQuote(`大肥鱼：${line}`, 7000);
   if (opinionTimer) clearTimeout(opinionTimer);
   opinionTimer = setTimeout(() => {
     opinionUntil = 0;
@@ -1536,7 +1664,7 @@ async function watchTogether() {
   if (!tvStream) { toast('先把抖音投到电视上，再一起看'); return; }
   if (tvOverlayMode === 'off') setTvOverlayMode('50');
   focusTvCompanion();
-  showTvQuote('小蓝鱼：我坐这儿，和你一起看。', 5200);
+  showTvQuote('大肥鱼：我坐这儿，和你一起看。', 5200);
   setBubble('我坐这儿，和你一起看。', 5200);
   if (state?.her?.asleep) {
     await act('wake');
@@ -1599,9 +1727,9 @@ $('tvFollowBtn')?.addEventListener('click', () => {
   applyTvFollow();
   if (tvFollowOn) {
     void takeHerToTv();
-    toast('小蓝鱼跟过来了：她在左下角陪你一起看电视');
+    toast('大肥鱼跟过来了：她在左下角陪你一起看电视');
   } else {
-    toast('小蓝鱼不再跟随；电视还在继续');
+    toast('大肥鱼不再跟随；电视还在继续');
   }
 });
 $('tvCompanionSize')?.addEventListener('input', (event) => {
@@ -1615,7 +1743,7 @@ $('tvCompanionBubbleBtn')?.addEventListener('click', () => {
   applyTvBubblePref();
   syncTvOpinionTimer();
   if (tvBubbleOn && tvFollowOn && tvStream) requestTvOpinion(false);
-  else if (!tvBubbleOn) toast('小蓝鱼的气泡已关闭');
+  else if (!tvBubbleOn) toast('大肥鱼的气泡已关闭');
 });
 $('tvCompanionShotBtn')?.addEventListener('click', () => requestTvOpinion(true));
 $('tvWatchBtn')?.addEventListener('click', watchTogether);
@@ -1663,6 +1791,8 @@ document.querySelectorAll('#modeChip button').forEach((b) => {
     localStorage.setItem('home-char-mode', charMode);
     applySpriteViewPref();
     document.querySelectorAll('#modeChip button').forEach((x) => x.classList.toggle('on', x.dataset.mode === charMode));
+$('modelQualityChip')?.addEventListener('click', switchModelQuality);
+updateModelQualityChip(false);
 applyBubblePref();
     applyCharVisibility();
     setMode(VIEW.mode);
@@ -1815,14 +1945,25 @@ function frame(now) {
     const walkingNow = her.walking && !dragging && !placeHold;
     lastDisplayPos = displayPos;
     const backNow = isBackView();
-    if (backNow !== lastBackView) {
-      lastBackView = backNow;
+    // 镜头从正面转到侧面时，虽然背面状态没变，也要切到侧跑帧。
+    const viewZone = her.walking ? (isSideRun(her) ? 'side' : 'front') : (backNow ? 'back' : 'front');
+    if (viewZone !== lastViewZone) {
+      lastViewZone = viewZone;
       if (!dragging && !placeHold) syncCharacter();
     }
+    lastBackView = backNow;
     world.updateCutaway(camera.position, new THREE.Vector3(displayPos[0], 1, displayPos[1]), VIEW.mode !== 'first' && VIEW.mode !== 'eyes');
     const facing = (her.facing || 0) * Math.PI / 180;
     gardenController?.updateCharacter(dragging || placeHold || VIEW.mode === 'eyes' ? { ...her, gardenWork: null } : her, { x: displayPos[0], y: her.elev || 0, z: displayPos[1] }, facing);
-    const flip = Math.sin(facing) < -0.25;
+    // run_hurry 原片是“朝左跑”：只有侧面跑时按屏幕横向速度决定是否镜像；
+    // 正面/背面/待机不镜像，避免左右脸和朝向突然翻面。
+    let flip = false;
+    if (charMode === 'webm' && isSideRun(her) && !dragging && !placeHold) {
+      camera.updateMatrixWorld();
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+      const move = new THREE.Vector3(Math.sin(facing), 0, -Math.cos(facing));
+      flip = move.dot(right) > 0.02;
+    }
     actor.update(dt, camera, {
       pos: displayPos, elev: her.elev || 0, walking: walkingNow, flip
     });

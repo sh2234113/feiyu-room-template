@@ -1,4 +1,4 @@
-// 小蓝鱼的家 —— 服务端「事实层 + 行为层」。
+// 大肥鱼的家 —— 服务端「事实层 + 行为层」。
 //
 // 设计边界（与《给陪伴角色做一个家》对齐）：
 //   · 事实层：需求、睡眠、病痛、房间/站位、事件日志。唯一事实源，页面与提示词都只读它。
@@ -110,17 +110,26 @@ export function roomAtPoint(pos) {
 }
 
 /** 点击落点：限制在家里、房间内、离墙留 0.22m；不在任何房间返回 null。 */
-export function normalizeFreePoint(raw) {
+export function normalizeFreePoint(raw, { preserveOutdoor = false } = {}) {
   if (!Array.isArray(raw) || raw.length < 2) return null;
   const x = Number(raw[0]);
   const z = Number(raw[1]);
   if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
   const room = roomAtPoint([x, z]);
   if (!room) return null;
-  // Outdoor clicks snap to a named safe waypoint: free diagonals must not cross beds or fences.
+  // 点击移动仍吸附到菜园安全路点；鼠标拖拽（preserveOutdoor）保留连续落点，
+  // 否则从鼠标抬起的位置跳到最近菜畦，观感会一顿一顿的。
   if (room.id === 'garden' || room.id === 'yard') {
-    const node = nearestNodeInRoom([x, z], room.id);
-    return node.pos.slice();
+    if (!preserveOutdoor) {
+      const node = nearestNodeInRoom([x, z], room.id);
+      return node.pos.slice();
+    }
+    const [x0, z0, x1, z1] = room.bounds;
+    const pad = 0.18;
+    return [
+      Math.min(x1 - pad, Math.max(x0 + pad, x)),
+      Math.min(z1 - pad, Math.max(z0 + pad, z))
+    ];
   }
   const [x0, z0, x1, z1] = room.bounds;
   const pad = 0.22;
@@ -490,7 +499,8 @@ export function normalizeHomeState(raw, now = Date.now()) {
     pain: clamp01(needs.pain ?? 0)
   };
   out.asleep = raw.asleep === true;
-  out.freePos = normalizeFreePoint(raw.freePos);
+  // 已经落地的自由点必须保留，否则拖拽放下后一读档就又吸回菜畦。
+  out.freePos = normalizeFreePoint(raw.freePos, { preserveOutdoor: true });
   if (out.spot === 'free' && out.freePos) {
     const r = roomAtPoint(out.freePos);
     if (r) out.room = r.id;
@@ -649,12 +659,153 @@ export function graphPath(fromId, toId) {
   return out.reverse();
 }
 
-/** 从当前点走到目标 spot：当前 spot 的 access → 图 → 目标 spot。 */
+// 大件家具的近似禁行区：只用于同房间直达边的碰撞检查，不改变站位。
+// 这是“地图建模”的保守近似；小摆件不参与，避免把路网打得太碎。
+const NAV_KEEPOUT = Object.freeze([
+  { room: 'living', rect: [5.15, 0.05, 7.45, 0.90] },   // 电视柜
+  { room: 'living', rect: [5.15, 4.55, 7.45, 5.90] },   // 沙发
+  { room: 'living', rect: [5.40, 2.85, 7.20, 3.95] },   // 茶几
+  { room: 'living', rect: [7.45, 0.75, 8.30, 2.95] },   // 书架
+  { room: 'kitchen', rect: [0.15, 0.10, 1.15, 3.35] },  // 西侧橱柜
+  { room: 'kitchen', rect: [3.35, 0.10, 4.10, 3.35] },  // 东侧橱柜
+  { room: 'dining', rect: [1.20, 4.30, 3.00, 5.50] },   // 餐桌+椅
+  { room: 'her_room', rect: [10.15, 0.20, 12.55, 2.40] }, // 床
+  { room: 'her_room', rect: [8.85, 2.60, 10.15, 3.75] },  // 书桌
+  { room: 'her_room', rect: [11.30, 3.00, 12.90, 3.95] }, // 衣柜
+  { room: 'bathroom', rect: [11.15, 5.95, 12.85, 7.05] }, // 洗手台
+  { room: 'bathroom', rect: [10.80, 6.70, 12.45, 7.85] }, // 淋浴
+  { room: 'laundry', rect: [9.05, 6.00, 10.35, 7.15] },   // 洗衣机
+  { room: 'balcony', rect: [1.00, 7.90, 4.60, 9.00] }     // 栏杆/花盆
+]);
+
+function pointInRect(p, rect) {
+  return p[0] >= rect[0] && p[0] <= rect[2] && p[1] >= rect[1] && p[1] <= rect[3];
+}
+function segmentHitsRect(a, b, rect, pad = 0.08) {
+  const x0 = rect[0] - pad, z0 = rect[1] - pad, x1 = rect[2] + pad, z1 = rect[3] + pad;
+  // Liang–Barsky：线段与轴对齐矩形的相交测试。
+  let t0 = 0, t1 = 1;
+  const dx = b[0] - a[0], dz = b[1] - a[1];
+  for (const [p, q] of [[-dx, a[0] - x0], [dx, x1 - a[0]], [-dz, a[1] - z0], [dz, z1 - a[1]]]) {
+    if (Math.abs(p) < 1e-9) { if (q < 0) return false; continue; }
+    const r = q / p;
+    if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+    else { if (r < t0) return false; if (r < t1) t1 = r; }
+  }
+  return t0 <= t1;
+}
+function segmentClear(a, b, roomId) {
+  if (!roomId) return false;
+  for (const item of NAV_KEEPOUT) {
+    if (item.room !== roomId) continue;
+    // 起点/终点本来就在家具上（沙发、床等）时，允许它离场，不把自己锁死。
+    if (pointInRect(a, item.rect) || pointInRect(b, item.rect)) continue;
+    if (segmentHitsRect(a, b, item.rect)) return false;
+  }
+  return true;
+}
+function dijkstraPath(nodeMap, edgeMap, startId, endId) {
+  if (!nodeMap[startId] || !nodeMap[endId]) return null;
+  if (startId === endId) return [startId];
+  const dist = new Map([[startId, 0]]);
+  const prev = new Map();
+  const open = [[0, startId]];
+  const seen = new Set();
+  while (open.length) {
+    open.sort((a, b) => a[0] - b[0]);
+    const [d, id] = open.shift();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (id === endId) break;
+    for (const [next, w] of edgeMap.get(id) || []) {
+      const nd = d + w;
+      if (nd < (dist.get(next) ?? Infinity)) {
+        dist.set(next, nd); prev.set(next, id); open.push([nd, next]);
+      }
+    }
+  }
+  if (!dist.has(endId)) return null;
+  const out = [];
+  let cur = endId;
+  while (cur) { out.push(cur); cur = prev.get(cur); }
+  return out.reverse();
+}
+
+/** 动态地图路由：同房间可见节点直达，跨房间仍走门洞图。 */
+export function buildMapRoute(from, target, now, speed = 0.55) {
+  if (!Array.isArray(from) || from.length < 2) return null;
+  const toPos = Array.isArray(target.pos) ? target.pos : spotOf(target.room, target.spot)?.pos;
+  if (!Array.isArray(toPos)) return null;
+  const fromRoom = roomAtPoint(from);
+  const toRoom = roomAtPoint(toPos);
+  if (!fromRoom || !toRoom) return null;
+  const nodeMap = {};
+  const edgeMap = new Map();
+  const addNode = (id, pos) => { nodeMap[id] = pos; if (!edgeMap.has(id)) edgeMap.set(id, []); };
+  const addEdge = (a, b) => {
+    if (!nodeMap[a] || !nodeMap[b] || a === b) return;
+    const d = Math.hypot(nodeMap[a][0] - nodeMap[b][0], nodeMap[a][1] - nodeMap[b][1]);
+    edgeMap.get(a).push([b, d]); edgeMap.get(b).push([a, d]);
+  };
+  for (const [id, p] of Object.entries(NODES)) addNode(id, p);
+  const fromId = '__from__', toId = '__to__';
+  addNode(fromId, from); addNode(toId, toPos);
+  // 原有门洞图
+  for (const [id, list] of ADJ) for (const [next, w] of list) {
+    if (nodeMap[id] && nodeMap[next]) {
+      edgeMap.get(id).push([next, w]);
+      if (!edgeMap.get(next).some(([n]) => n === id)) edgeMap.get(next).push([id, w]);
+    }
+  }
+  const outdoor = (room) => room.id === 'garden' || room.id === 'yard';
+  // 室外保持原来的菜畦/小径图：菜畦和围栏不是规则矩形，不能用室内可见性捷径。
+  if (outdoor(fromRoom)) addEdge(fromId, nearestNodeInRoom(from, fromRoom.id).id);
+  if (outdoor(toRoom)) addEdge(toId, nearestNodeInRoom(toPos, toRoom.id).id);
+  if (!outdoor(fromRoom) && !outdoor(toRoom)) {
+    // 同房间可见性捷径：只在同一个矩形房间内，避开大件家具。
+    const roomNodes = Object.entries(NODES).filter(([, p]) => roomAtPoint(p)?.id === fromRoom.id);
+    const targetNodes = Object.entries(NODES).filter(([, p]) => roomAtPoint(p)?.id === toRoom.id);
+    for (const [a] of roomNodes) {
+      if (segmentClear(from, nodeMap[a], fromRoom.id)) addEdge(fromId, a);
+      for (const [b] of roomNodes) {
+        if (a < b && segmentClear(nodeMap[a], nodeMap[b], fromRoom.id)) addEdge(a, b);
+      }
+    }
+    for (const [b] of targetNodes) {
+      if (segmentClear(nodeMap[b], toPos, toRoom.id)) addEdge(b, toId);
+      for (const [a] of targetNodes) {
+        if (a < b && segmentClear(nodeMap[a], nodeMap[b], toRoom.id)) addEdge(a, b);
+      }
+    }
+    // 同一房间直接可见时，允许不经过任何命名路点。
+    if (fromRoom.id === toRoom.id && segmentClear(from, toPos, fromRoom.id)) addEdge(fromId, toId);
+  } else {
+    // 一端在室外：室内/室外端点各接最近路点，跨房间仍然只走已有门洞图。
+    if (!outdoor(fromRoom)) {
+      const roomNodes = Object.entries(NODES).filter(([, p]) => roomAtPoint(p)?.id === fromRoom.id);
+      for (const [a] of roomNodes) if (segmentClear(from, nodeMap[a], fromRoom.id)) addEdge(fromId, a);
+    }
+    if (!outdoor(toRoom)) {
+      const targetNodes = Object.entries(NODES).filter(([, p]) => roomAtPoint(p)?.id === toRoom.id);
+      for (const [b] of targetNodes) if (segmentClear(nodeMap[b], toPos, toRoom.id)) addEdge(b, toId);
+    }
+  }
+  const ids = dijkstraPath(nodeMap, edgeMap, fromId, toId);
+  if (!ids) return null;
+  const points = ids.map((id) => nodeMap[id].slice());
+  const total = polylineLength(points);
+  return { points, departAt: now, arriveAt: now + Math.max(1, total / speed * 1000), speed, target };
+}
+
+/** 从当前点走到目标 spot：按地图可见性选最近路线。 */
 export function buildRoute(from, fromSpotDef, target, now, speed = 0.55) {
   if (!Array.isArray(from) || from.length < 2) return null;
   const toSpotDef = spotOf(target.room, target.spot);
   const toPos = Array.isArray(target.pos) ? target.pos : toSpotDef?.pos;
   if (!toPos) return null;
+  const mapped = buildMapRoute(from, { ...target, pos: toPos }, now, speed);
+  if (mapped) return mapped;
+  // 极端情况下（房间数据不完整）保底走原来的门洞图。
   const startId = fromSpotDef?.access || nearestNode(from).id;
   const endId = target.access || toSpotDef?.access || nearestNode(toPos).id;
   const nodes = graphPath(startId, endId);
@@ -663,14 +814,7 @@ export function buildRoute(from, fromSpotDef, target, now, speed = 0.55) {
   const end = toPos.slice();
   if (Math.hypot(points.at(-1)[0] - end[0], points.at(-1)[1] - end[1]) > 0.04) points.push(end);
   const total = polylineLength(points);
-  const departAt = now;
-  return {
-    points,
-    departAt,
-    arriveAt: departAt + Math.max(1, total / speed * 1000),
-    speed,
-    target
-  };
+  return { points, departAt: now, arriveAt: now + Math.max(1, total / speed * 1000), speed, target };
 }
 
 export function polylineLength(points) {
@@ -1266,7 +1410,7 @@ export function applyHomeAction(state, input = {}) {
     event = { type: 'go', text: '你指了一个地方' };
   } else if (action === 'place') {
     if (s.asleep) return { state: s, changed: false, event: null };
-    const p = normalizeFreePoint(input.pos);
+    const p = normalizeFreePoint(input.pos, { preserveOutdoor: input.free === true });
     if (!p) return { state: s, changed: false, event: null };
     const room = roomAtPoint(p);
     if (!room) return { state: s, changed: false, event: null };
@@ -1480,7 +1624,7 @@ function round(n) {
   return Math.round(clamp01(n) * 100) / 100;
 }
 
-/** 给 QQ 小蓝鱼看的文字快照：只给形容词，不给数字。 */
+/** 给 QQ 大肥鱼看的文字快照：只给形容词，不给数字。 */
 export function buildHomePromptLine(state, options = {}) {
   const now = Number(options.now) || Date.now();
   const s = normalizeHomeState(state, now);

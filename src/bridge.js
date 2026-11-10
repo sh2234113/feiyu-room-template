@@ -4181,7 +4181,7 @@ async function main() {
           if (action === 'talk' && !text.trim()) { sendJson({ ok: false, error: '留言不能为空' }, 400); return; }
           const { state, env } = homeTick(now);
           const result = applyHomeAction(state, {
-            action, text, room: body.room, spot: body.spot, pos: body.pos, on: body.on, at: now, by: '小屋访客', emotion: env.emotion
+            action, text, room: body.room, spot: body.spot, pos: body.pos, free: body.free === true, on: body.on, at: now, by: '小屋访客', emotion: env.emotion
           });
           if (!result.changed) {
             const roomState = loadRoomState(ROOM_FILE, now);

@@ -18,7 +18,9 @@ import {
   listSpots,
   loadHomeState,
   normalizeHomeState,
+  normalizeFreePoint,
   positionOnRoute,
+  polylineLength,
   recentEvents,
   saveHomeState
 } from '../src/home-state.js';
@@ -275,6 +277,9 @@ test('路点图连通，所有站位对之间都有路线，且不穿墙', () =>
       assert.ok(graphPath(a.access, b.access), `${a.key} -> ${b.access} 不连通`);
       const r = buildRoute(a.pos, { access: a.access }, { room: b.room, spot: b.spot }, T0, 0.55);
       assert.ok(r && r.points.length >= 2, `${a.key} -> ${b.key} 没有路线`);
+      const oldNodes = graphPath(a.access, b.access);
+      const oldLength = polylineLength([a.pos, ...oldNodes, b.pos]);
+      assert.ok(polylineLength(r.points) <= oldLength + 0.01, `${a.key} -> ${b.key} 比原门洞图更远`);
       for (const p of r.points) {
         const outdoor = ['garden','yard'].some(id => {
           const bounds = HOME_LAYOUT.rooms.find(room => room.id === id).bounds;
@@ -298,6 +303,22 @@ test('route 位置随时间沿折线前进', () => {
   close(mid[1], 0, 1e-6);
   const end = positionOnRoute(route, T0 + 20_000);
   assert.deepEqual(end, [2, 2]);
+});
+
+test('菜园拖拽：点击仍吸附路点，拖拽自由点连续且读档不反弹', () => {
+  const clicked = normalizeFreePoint([5.9, -1.45]);
+  assert.deepEqual(clicked, [4.7, -0.9], '点击移动仍应吸附到最近菜畦');
+  const dropped = normalizeFreePoint([5.9, -1.45], { preserveOutdoor: true });
+  assert.deepEqual(dropped, [5.9, -1.45], '拖拽落点应保留鼠标位置');
+
+  let s = atState({ room: 'garden', spot: 'plot4', freePos: null, nextDecisionAt: T0 + 10 * HOUR });
+  s = applyHomeAction(s, { action: 'place', pos: dropped, free: true, at: T0 + 1 }).state;
+  assert.deepEqual(s.freePos, dropped);
+  assert.equal(s.spot, 'free');
+  assert.equal(s.room, 'garden');
+
+  const reloaded = normalizeHomeState(s, T0 + 2);
+  assert.deepEqual(reloaded.freePos, dropped, '重新读状态不能把自由落点吸回菜畦');
 });
 
 test('拖拽放下：直接落点，不再生成路线', () => {

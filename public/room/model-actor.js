@@ -9,7 +9,11 @@
 import * as THREE from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 
-const MODEL_URL = './assets/models/da-feiyu.opt.glb';
+export const MODEL_URLS = Object.freeze({
+  optimized: './assets/models/da-feiyu.opt.glb',
+  source: './assets/models/da-feiyu.glb'
+});
+const MODEL_URL = MODEL_URLS.optimized;
 const TARGET_HEIGHT = 1.42;
 const RUN_VERTEX_GLSL = `\n  if (uRunAmp > 0.001) {\n    float hipY = 0.34;\n    float legW = 1.0 - clamp(transformed.y / hipY, 0.0, 1.0);\n    float side = smoothstep(-0.05, 0.05, transformed.x);\n    float phase = uRunPhase + side * 3.1415926;\n    float ang = sin(phase) * uRunSwing * legW * uRunAmp;\n    float ry = transformed.y - hipY;\n    float rz = transformed.z;\n    transformed.y = hipY + ry * cos(ang) - rz * sin(ang);\n    transformed.z = rz * cos(ang) + ry * sin(ang);\n  }\n`;
 
@@ -32,6 +36,7 @@ export class ModelActor {
   constructor(scene, opts = {}) {
     this.scene = scene;
     this.url = opts.url || MODEL_URL;
+    this.quality = opts.quality || (this.url === MODEL_URLS.source ? 'source' : 'optimized');
     this.group = new THREE.Group();
     this.group.name = 'da-feiyu-model';
     this.group.visible = false;
@@ -209,6 +214,8 @@ export class ModelActor {
         m.dispose?.();
       }
     });
+    this.group.removeFromParent?.();
+    this._shadow.removeFromParent?.();
     this.scene.remove(this.group);
     this.scene.remove(this._shadow);
   }

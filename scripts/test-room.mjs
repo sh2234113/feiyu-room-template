@@ -188,6 +188,17 @@ test('动作清单与页面约定一致', () => {
   assert.deepEqual([...ROOM_ACTIONS], ['visit', 'pet', 'poke', 'feed', 'play', 'talk', 'sleep', 'wake', 'lamp']);
 });
 
+test('桌宠动作栏引用的动画片段都存在于 actor.js', () => {
+  const html = fs.readFileSync(new URL('../public/room/index.html', import.meta.url), 'utf8');
+  const actorSource = fs.readFileSync(new URL('../public/room/actor.js', import.meta.url), 'utf8');
+  const clips = [...html.matchAll(/data-pet-clip="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(new Set(clips).size, clips.length, '动作栏片段不能重复');
+  assert.ok(clips.includes('dance'), '动作栏必须有跳舞');
+  for (const clip of clips) {
+    assert.ok(new RegExp(`\n  ${clip}:`).test(actorSource), `actor.js 缺少动画片段：${clip}`);
+  }
+});
+
 if (process.exitCode) {
   console.error(`\n${passed} 项通过，存在失败项`);
 } else {
