@@ -1,4 +1,4 @@
-// 大肥鱼的家 —— 服务端「事实层 + 行为层」。
+// 小蓝鱼的家 —— 服务端「事实层 + 行为层」。
 //
 // 设计边界（与《给陪伴角色做一个家》对齐）：
 //   · 事实层：需求、睡眠、病痛、房间/站位、事件日志。唯一事实源，页面与提示词都只读它。
@@ -1624,7 +1624,7 @@ function round(n) {
   return Math.round(clamp01(n) * 100) / 100;
 }
 
-/** 给 QQ 大肥鱼看的文字快照：只给形容词，不给数字。 */
+/** 给 QQ 小蓝鱼看的文字快照：只给形容词，不给数字。 */
 export function buildHomePromptLine(state, options = {}) {
   const now = Number(options.now) || Date.now();
   const s = normalizeHomeState(state, now);

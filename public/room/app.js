@@ -1,4 +1,4 @@
-// 大肥鱼的家 —— 页面表现层。
+// 小蓝鱼的家 —— 页面表现层。
 // 事实/行为在 src/home-state.js；这里只读快照、画房间、处理相机与交互。
 import * as THREE from './vendor/three.module.js';
 import { createWorld } from './world.js';
@@ -1470,7 +1470,7 @@ function playPetAction(clip, label) {
     });
   } catch { petActionOverride = null; toast('这个动作没加载出来'); return; }
   setBubble(label, Math.min(duration, 6000));
-  toast(`大肥鱼：${label}`);
+  toast(`小蓝鱼：${label}`);
   setTimeout(() => {
     if (petActionOverride?.token === token) { petActionOverride = null; syncCharacter(); }
   }, duration + 120);
@@ -1671,7 +1671,7 @@ function showVideoOpinion() {
   lastOnceAt = 0;
   syncCharacter();
   setBubble(line, 7000);
-  showTvQuote(`大肥鱼：${line}`, 7000);
+  showTvQuote(`小蓝鱼：${line}`, 7000);
   if (opinionTimer) clearTimeout(opinionTimer);
   opinionTimer = setTimeout(() => {
     opinionUntil = 0;
@@ -1685,7 +1685,7 @@ async function watchTogether() {
   if (!tvStream) { toast('先把抖音投到电视上，再一起看'); return; }
   if (tvOverlayMode === 'off') setTvOverlayMode('50');
   focusTvCompanion();
-  showTvQuote('大肥鱼：我坐这儿，和你一起看。', 5200);
+  showTvQuote('小蓝鱼：我坐这儿，和你一起看。', 5200);
   setBubble('我坐这儿，和你一起看。', 5200);
   if (state?.her?.asleep) {
     await act('wake');
@@ -1748,9 +1748,9 @@ $('tvFollowBtn')?.addEventListener('click', () => {
   applyTvFollow();
   if (tvFollowOn) {
     void takeHerToTv();
-    toast('大肥鱼跟过来了：她在左下角陪你一起看电视');
+    toast('小蓝鱼跟过来了：她在左下角陪你一起看电视');
   } else {
-    toast('大肥鱼不再跟随；电视还在继续');
+    toast('小蓝鱼不再跟随；电视还在继续');
   }
 });
 $('tvCompanionSize')?.addEventListener('input', (event) => {
@@ -1764,7 +1764,7 @@ $('tvCompanionBubbleBtn')?.addEventListener('click', () => {
   applyTvBubblePref();
   syncTvOpinionTimer();
   if (tvBubbleOn && tvFollowOn && tvStream) requestTvOpinion(false);
-  else if (!tvBubbleOn) toast('大肥鱼的气泡已关闭');
+  else if (!tvBubbleOn) toast('小蓝鱼的气泡已关闭');
 });
 $('tvCompanionShotBtn')?.addEventListener('click', () => requestTvOpinion(true));
 $('tvWatchBtn')?.addEventListener('click', watchTogether);
