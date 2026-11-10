@@ -161,6 +161,7 @@ assets/             你自己的贴纸/图片目录（默认不提交）
 | 查看隐私与素材边界 | [PRIVACY_AND_ASSETS.md](PRIVACY_AND_ASSETS.md) |
 | 查看灵感来源 / 署名 | [INSPIRATION.md](INSPIRATION.md) |
 | 查看第三方许可证 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
+| 用 NapCat 接 QQ | [docs/guides/NAPCAT.md](docs/guides/NAPCAT.md) |
 
 ## 素材与许可
 

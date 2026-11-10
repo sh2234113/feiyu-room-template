@@ -21,6 +21,7 @@
     "authPrefix": "Bearer",
     "allowRemote": false
   },
+  "gateway": "snowluma",
   "budget": {
     "enabled": true,
     "dailyTokens": 300000000,
@@ -58,10 +59,19 @@
   "ackMessage": "",
   "sendDelayMs": 300,
   "questionTimeoutMs": 300000,
-  "consolePort": 13100,
+  "consolePort": 3100,
   "consoleToken": "",
   "pricing": {
-    "models": {}
+    "models": {
+      "my-relay-model": {
+        "label": "我的中转模型",
+        "off": {
+          "cacheHit": 0.5,
+          "cacheMiss": 3,
+          "output": 9
+        }
+      }
+    }
   },
   "security": {
     "interceptNotify": true
@@ -86,7 +96,7 @@
     "mustReplyKeywords": [
       "deepseek",
       "小鲸鱼",
-      "小蓝鱼",
+      "大肥鱼",
       "鲸鱼",
       "d指导",
       "在吗"
@@ -179,7 +189,7 @@
         "D师傅",
         "d师傅",
         "深度求索",
-        "小蓝鱼",
+        "大肥鱼",
         "鲸鱼",
         "DeepSeek V3",
         "DeepSeek R1",

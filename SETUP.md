@@ -70,6 +70,8 @@ SnowLuma 是 QQ → OneBot v11 的网关，**专有软件，不在本仓库内**
 
 只玩房间可以跳过；桥接启动时 SnowLuma 连不上会重试，不影响 `/room/`。
 
+如果要使用 **NapCat** 而不是 SnowLuma，把 `config.json` 的 `"gateway"` 改成 `"napcat"`，并把 `snowluma.wsUrl/httpUrl/accessToken` 指向 NapCat 的 OneBot 11 服务；详见 [NapCat 接入](docs/guides/NAPCAT.md)。
+
 ---
 
 ## 4. 下载本模板

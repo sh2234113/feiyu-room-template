@@ -341,13 +341,22 @@ applyTvCastChip();
   if (message) toast(message);
 }
 
+function tvCastUnavailableReason() {
+  if (!window.isSecureContext) {
+    const where = location.host || location.protocol;
+    return `投屏需要 HTTPS 或 localhost；当前是 ${where}。用局域网 IP 直接打开时浏览器不会弹共享窗口，请用 localhost/SSH 隧道或 HTTPS。`;
+  }
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    return '这个浏览器不支持投屏，请用桌面 Chrome / Edge，不要用手机内置浏览器';
+  }
+  return '';
+}
+
 async function startTvCast() {
   if (tvStream) return;
-  if (!tvMat) { toast('电视屏幕还没准备好'); return; }
-  if (!navigator.mediaDevices?.getDisplayMedia) {
-    toast('这个浏览器不支持投屏，请用桌面 Chrome/Edge');
-    return;
-  }
+  if (!tvMat) { toast('电视屏幕还没准备好，等房间加载完再点'); return; }
+  const reason = tvCastUnavailableReason();
+  if (reason) { toast(reason); return; }
   try {
     const stream = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: 30 },
@@ -382,13 +391,25 @@ async function startTvCast() {
     applyTvCastChip();
     toast('已投到电视：在原标签页里打开抖音并滚动，房间电视会同步');
   } catch (error) {
-    if (error?.name === 'NotAllowedError' || error?.name === 'AbortError') {
+    const name = String(error?.name || '');
+    if (name === 'NotAllowedError' || name === 'AbortError') {
       stopTvCast();
+      toast('投屏已取消：你没有选择标签页，或浏览器/系统权限拦截了屏幕共享。请点允许后重试。');
+      return;
+    }
+    if (name === 'NotFoundError') {
+      stopTvCast();
+      toast('没有可共享的窗口：请打开一个抖音标签页后再点投屏');
+      return;
+    }
+    if (name === 'NotReadableError' || name === 'SecurityError' || name === 'NotSupportedError') {
+      stopTvCast();
+      toast(`投屏被浏览器拦截（${name}）：请检查系统屏幕录制权限、企业策略，或换桌面 Chrome/Edge`);
       return;
     }
     tvStream = null;
     stopTvCast();
-    toast(`投屏失败：${error?.message || error?.name || '浏览器拒绝共享'}`);
+    toast(`投屏失败：${error?.message || name || '浏览器拒绝共享'}`);
   }
 }
 
