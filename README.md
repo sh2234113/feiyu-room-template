@@ -1,5 +1,8 @@
 # dsh-room-template
 
+> 当前发布包：**大肥鱼房子最新版1**  
+> 以后每次修改模板，版本号 +1。
+
 [安装指南](SETUP.md) · [生成自己的房子](HOUSE_GENERATION_PROMPT.md) · [GitHub 上传教程](GITHUB_UPLOAD.md) · [问题反馈](https://github.com/你的用户名/dsh-room-template/issues)
 
 我把这套**公开、脱敏、可复刻**的 DeepSeek Harness + SnowLuma 房间整理成了模板：3D 大平层、家具、屋后菜园、电视投屏陪伴、QQ 桥接和网页私聊都在里面。

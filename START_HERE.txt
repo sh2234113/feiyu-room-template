@@ -1,0 +1,47 @@
+大肥鱼房子最新版 1 —— 解压后从这里开始
+=================================
+
+这是一个源码模板，不是免安装 EXE。需要 Node.js、DSH；接 QQ 还需要 SnowLuma 或 NapCat。
+
+一、准备
+1. Node.js >= 22.13.0
+2. 已安装并启动 DeepSeek Harness（默认 http://127.0.0.1:3080）
+3. 接 QQ 的话，安装 SnowLuma 或 NapCat，并开启 OneBot 11 HTTP + WebSocket
+
+二、安装
+1. 进入本目录，打开 PowerShell
+2. npm ci
+3. Copy-Item config.example.json config.json
+4. 编辑 config.json：
+   - ownerQQ：你的 QQ
+   - allow.private / allow.groups：白名单
+   - consoleToken：一长串随机字符
+   - snowluma.wsUrl / httpUrl / accessToken：SnowLuma 或 NapCat 的地址
+   - gateway：snowluma 或 napcat
+5. node scripts/setup-dsh.mjs
+6. 重启 DSH Web（必须）
+7. npm start
+
+三、打开
+http://127.0.0.1:13100/room/
+
+四、3D 模型
+- 默认：public/room/assets/models/da-feiyu.opt.glb（6.7 MB）
+- 右下角右上「画质」按钮：按需加载 da-feiyu.glb（58.9 MB 原始工程）
+- 原始模型随包附带，页面默认不加载
+
+五、NapCat
+把 config.json 的 gateway 改成 "napcat"，
+snowluma.wsUrl / httpUrl / accessToken 指向 NapCat。
+详见 docs/guides/NAPCAT.md
+
+六、不要做
+- 不要上传 config.json、state/、audio/ 到公开仓库
+- 不要把别人的照片、语音、聊天记录放进去
+- 不要用手机浏览器投屏（标签页共享只支持桌面 Chrome/Edge）
+- HTTP 局域网 IP 不能投屏；用 localhost 或 HTTPS
+
+七、详细文档
+README.md
+SETUP.md
+docs/guides/NAPCAT.md
