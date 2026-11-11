@@ -1,4 +1,4 @@
-大肥鱼房子最新版 2 —— 解压后从这里开始
+大肥鱼房子最新版 3 —— 解压后从这里开始
 =================================
 
 这是一个源码模板，不是免安装 EXE。需要 Node.js、DSH；接 QQ 还需要 SnowLuma 或 NapCat。
@@ -45,3 +45,8 @@ snowluma.wsUrl / httpUrl / accessToken 指向 NapCat。
 README.md
 SETUP.md
 docs/guides/NAPCAT.md
+
+
+八、可选第三方安装包
+tools/ 目录下有暴喵AI管家 Windows / macOS 安装包。
+这些安装包经暴喵AI官方授权分发，适用暴喵AI自己的许可，不属于本项目 MIT 代码。

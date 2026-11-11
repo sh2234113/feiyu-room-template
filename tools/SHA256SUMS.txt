@@ -1,0 +1,2 @@
+2c030d3a7a1a2a4f121e3899d303740abb4b9c452a04763e53e525a767330d40  tools/AI-Manager-v1.16.1-Windows.msi
+0b66b985d362718b900c93bf0a091ded214b7cebc65b4878958c0fa2a3d34c41  tools/AI-Manager-v1.16.1-macOS.dmg

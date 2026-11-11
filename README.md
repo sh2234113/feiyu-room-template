@@ -1,13 +1,13 @@
 # 大肥鱼房子模板
 
-> 当前发布包：**大肥鱼房子最新版2**  
+> 当前发布包：**大肥鱼房子最新版3**  
 > 以后每次修改模板，版本号 +1。
 
 [安装指南](SETUP.md) · [生成自己的房子](HOUSE_GENERATION_PROMPT.md) · [GitHub 上传教程](GITHUB_UPLOAD.md) · [问题反馈](https://github.com/sh2234113/feiyu-room-template/issues)
 
 我把这套**公开、脱敏、可复刻**的 DeepSeek Harness + SnowLuma 房间整理成了模板：3D 大平层、家具、屋后菜园、电视投屏陪伴、QQ 桥接和网页私聊都在里面。
 
-当前模板版本：`v2.0.0`。目标 DSH：`0.2.1-rc.2`；Node.js：`>= 22.13.0`。
+当前模板版本：`v3.0.0`。目标 DSH：`0.2.1-rc.2`；Node.js：`>= 22.13.0`。
 
 > [!IMPORTANT]
 > **这是一个模板，不是作者本人的运行存档，也不隶属于 SnowLuma、DeepSeek 或腾讯 / QQ。**
@@ -164,6 +164,7 @@ assets/             你自己的贴纸/图片目录（默认不提交）
 | 查看隐私与素材边界 | [PRIVACY_AND_ASSETS.md](PRIVACY_AND_ASSETS.md) |
 | 查看灵感来源 / 署名 | [INSPIRATION.md](INSPIRATION.md) |
 | 查看第三方许可证 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
+| 暴喵AI管家安装包（第三方） | [tools/README.md](tools/README.md) |
 | 用 NapCat 接 QQ | [docs/guides/NAPCAT.md](docs/guides/NAPCAT.md) |
 
 ## 素材与许可
